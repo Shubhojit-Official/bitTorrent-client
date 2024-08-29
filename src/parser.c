@@ -4,7 +4,7 @@
 
 #include "../include/parser.h"
 
-Bencode* parseInt(const char** data){
+Bencode* parse_int(const char** data){
     (*data)++; // skip "i"
     long value = strtol(*data,(char**)data,10);
     (*data)++; //skip "e"
@@ -18,7 +18,7 @@ Bencode* parseInt(const char** data){
     return b;    
 }
 
-Bencode* parseString(const char**data){
+Bencode* parse_string(const char**data){
     long length = strtol(*data,(char **)data,10);
     (*data)++; //skip ":"
     
@@ -38,14 +38,14 @@ Bencode* parseString(const char**data){
 }
 
 
-Bencode *parseList(const char** data){
+Bencode *parse_list(const char** data){
     (*data)++; //skips "l"
     Bencode **list =  NULL;
     size_t count = 0; // for the count of elements
 
     while(**data !='e'){
         list = realloc(list, (count + 1)* sizeof(Bencode*));
-        list[count++] = parseBencode(data);
+        list[count++] = parse_bencode(data);
     }
     (*data)++; //skips "e"
 
@@ -58,7 +58,7 @@ Bencode *parseList(const char** data){
     return b;
 }
 
-Bencode *parseDict(const char **data) {
+Bencode *parse_dict(const char **data) {
     (*data)++;  // Skip the 'd'
 
     Bencode **dict = NULL;
@@ -66,8 +66,8 @@ Bencode *parseDict(const char **data) {
 
     while (**data != 'e') {
         dict = realloc(dict, (count + 2) * sizeof(Bencode *));
-        dict[count++] = parseBencode(data);  // Parse the key (a string)
-        dict[count++] = parseBencode(data);  // Parse the value
+        dict[count++] = parse_bencode(data);  // Parse the key (a string)
+        dict[count++] = parse_bencode(data);  // Parse the value
     }
 
     (*data)++;  // Skip the 'e'
@@ -75,27 +75,27 @@ Bencode *parseDict(const char **data) {
     Bencode *b = malloc(sizeof(Bencode));
     b->type = BE_DICT;
     b->value.dict = dict;
-    b->len = count;
+    b->len = count/2;
 
     return b;
 }
 
-Bencode* parseBencode(const char **data) {
+Bencode* parse_bencode(const char **data) {
     if (**data == 'i') {
-        return parseInt(data);
+        return parse_int(data);
     } else if (**data >= '0' && **data <= '9') {
-        return parseString(data);
+        return parse_string(data);
     } else if (**data == 'l') {
-        return parseList(data);
+        return parse_list(data);
     } else if (**data == 'd') {
-        return parseDict(data);
+        return parse_dict(data);
     }
     return NULL;  // Invalid bencode data
 }
 
 
 
-char* readFile(const char *filename){
+char* read_file(const char *filename){
     // Open File
     FILE *file = fopen(filename, "rb");
     if(file == NULL){
@@ -125,24 +125,51 @@ char* readFile(const char *filename){
     return buffer;
 }
 
+// use only for debugging purposes
+void __print_parsed_data(Bencode* data){
+    switch (data->type)
+    {
+        case BE_INTEGER:
+            printf("%ld", data->value.integer);
+            break;
+        case BE_STRING:
+            printf("%s", data->value.string);
+            break;
+        case BE_LIST:
+            printf("[");
+            for (size_t i = 0; i < data->len; i++)
+            {
+                Bencode* item = (data->value.list)[i];
+                __print_parsed_data(item);
+                i < data->len - 1 ? printf(", ") : printf("]"); // dont print "," at the end of the list
+            }
+            break;
+        case BE_DICT:
+            printf("{");
+            for (size_t i = 0; i < data->len + 1; i+=2)
+            {
+                Bencode* key = (data->value.list)[i];
+                __print_parsed_data(key);
+                printf(" : ");
+                Bencode* value = (data->value.list)[i+1];
+                __print_parsed_data(value);
+                i < data->len-1 ? printf(", ") : printf("}");
+            }
+            break;
+
+        default:
+            break;
+    }
+}
+
 
 int main(int argc, char const *argv[]){   
 
-    const char* bencode_data = "li42e5:spamse";
-    Bencode* parsed = parseBencode(&bencode_data);
-    if(parsed->type == BE_LIST){
-        for (size_t i = 0; i < parsed->len; i++)
-        {
-            if ((parsed->value.list)[i]->type == BE_INTEGER)
-            {
-                printf("%ld\n", (parsed->value.list)[i]->value.integer);
-            }
-            else if((parsed->value.list)[i]->type == BE_STRING){
-                printf("%s\n", (parsed->value.list)[i]->value.string);
-            }
-            
-        }
-        
-    }
+    // const char* bencode_data = "di42e4:spami21e5:Helloli69ei420eed2:Hi3:supee";
+    const char* bencode_data = "d8:announce2:Hi5:filesdi1e2:Hiee";
+
+    Bencode* parsed = parse_bencode(&bencode_data);
+    __print_parsed_data(parsed);
+
     return 0;
 }

@@ -2,7 +2,7 @@
 #define PARSER_H
 
 // Bencode Data Types
-typedef enum{
+typedef enum BE_TYPE{
     BE_STRING,
     BE_INTEGER,
     BE_LIST,
@@ -25,7 +25,7 @@ typedef struct Bencode
 
 }Bencode;
 
-Bencode* parseBencode(const char **data);
+Bencode* parse_bencode(const char **data);
 
 
 
