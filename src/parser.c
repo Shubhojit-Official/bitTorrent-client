@@ -4,7 +4,7 @@
 
 #include "../include/parser.h"
 
-Bencode* parse_int(const char** data){
+Bencode* __parse_int(const char** data){ 
     (*data)++; // skip "i"
     long value = strtol(*data,(char**)data,10);
     (*data)++; //skip "e"
@@ -18,7 +18,7 @@ Bencode* parse_int(const char** data){
     return b;    
 }
 
-Bencode* parse_string(const char**data){
+Bencode* __parse_string(const char**data){
     long length = strtol(*data,(char **)data,10);
     (*data)++; //skip ":"
     
@@ -38,7 +38,7 @@ Bencode* parse_string(const char**data){
 }
 
 
-Bencode *parse_list(const char** data){
+Bencode* __parse_list(const char** data){
     (*data)++; //skips "l"
     Bencode **list =  NULL;
     size_t count = 0; // for the count of elements
@@ -58,7 +58,7 @@ Bencode *parse_list(const char** data){
     return b;
 }
 
-Bencode *parse_dict(const char **data) {
+Bencode* __parse_dict(const char **data) {
     (*data)++;  // Skip the 'd'
 
     Bencode **dict = NULL;
@@ -82,13 +82,13 @@ Bencode *parse_dict(const char **data) {
 
 Bencode* parse_bencode(const char **data) {
     if (**data == 'i') {
-        return parse_int(data);
+        return __parse_int(data);
     } else if (**data >= '0' && **data <= '9') {
-        return parse_string(data);
+        return __parse_string(data);
     } else if (**data == 'l') {
-        return parse_list(data);
+        return __parse_list(data);
     } else if (**data == 'd') {
-        return parse_dict(data);
+        return __parse_dict(data);
     }
     return NULL;  // Invalid bencode data
 }
