@@ -162,6 +162,18 @@ void __print_parsed_data(Bencode* data){
     }
 }
 
+Bencode** get_all_keys(Bencode* be_node){
+    if (be_node->type != BE_DICT) return NULL;
+    
+    Bencode **keys = malloc(be_node->len * sizeof(Bencode*));
+    
+    for (size_t i = 0, j = 0; i < be_node->len + 1; i+=2, j++){
+        keys[j] = (be_node->value.dict)[i];
+    }
+
+    return keys;
+}
+
 
 int main(int argc, char const *argv[]){   
 
