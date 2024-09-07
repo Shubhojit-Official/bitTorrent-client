@@ -1,5 +1,5 @@
-#ifndef PARSER_H
-#define PARSER_H
+#ifndef BENCODE_H
+#define BENCODE_H
 
 // Bencode Data Types
 typedef enum BE_TYPE{
@@ -33,12 +33,7 @@ Bencode* __parse_dict(const char**data);
 void __print_parsed_data(Bencode* data); // use it to print the parsed data
 
 //---API---
-/*
-    @param const char **data : Pointer to the bencoded string
-    @return Bencode* : A pointer to the Bencode Struct
- */
 Bencode* parse_bencode(const char **data);
-// @param Bencode* be_node: Pointer to a *Parsed* Bencoded Dictionary
 Bencode** get_all_keys(Bencode* be_node);
 
 

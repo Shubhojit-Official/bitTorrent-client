@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../include/parser.h"
+#include "../include/bencode.h"
 
 Bencode* __parse_int(const char** data){ 
     (*data)++; // skip "i"
@@ -75,11 +75,15 @@ Bencode* __parse_dict(const char **data) {
     Bencode *b = malloc(sizeof(Bencode));
     b->type = BE_DICT;
     b->value.dict = dict;
-    b->len = count/2;
+    b->len = count;
 
     return b;
 }
 
+/*
+    @param char**data : Pointer to the bencoded string
+    @return Bencode*:  A pointer to the Bencode Struct
+ */
 Bencode* parse_bencode(const char **data) {
     if (**data == 'i') {
         return __parse_int(data);
@@ -146,18 +150,19 @@ void __print_parsed_data(Bencode* data){
             break;
         case BE_DICT:
             printf("{");
-            for (size_t i = 0; i < data->len + 1; i+=2)
+            for (size_t i = 0; i < data->len; i+=2) 
             {
-                Bencode* key = (data->value.list)[i];
+                Bencode* key  = (data->value.dict)[i];
                 __print_parsed_data(key);
-                printf(" : ");
-                Bencode* value = (data->value.list)[i+1];
+                printf(":");
+                Bencode* value = (data->value.dict)[i+1];
                 __print_parsed_data(value);
-                i < data->len-1 ? printf(", ") : printf("}");
+                i < data->len - 2 ? printf(", ") : printf("}"); 
             }
             break;
 
         default:
+            perror("Invalid BE_TYPE");
             break;
     }
 }
@@ -174,6 +179,23 @@ Bencode** get_all_keys(Bencode* be_node){
     return keys;
 }
 
+/*
+@param Bencode* b: A pointer to a Bencode Object
+*/
+void free_be(Bencode*b){
+    if(b->type == BE_STRING){
+        free(b->value.string);
+    }
+    else if(b->type == BE_DICT || b->type == BE_LIST){
+        for (size_t i = 0; i < b->len; i++)
+        {
+            free_be(b->value.list[i]);  //value.list and value.dict reffers to the same memory space as it is a union
+        }
+        free(b->value.list);
+    }
+    free(b);
+}
+
 
 int main(int argc, char const *argv[]){   
 
@@ -182,6 +204,7 @@ int main(int argc, char const *argv[]){
 
     Bencode* parsed = parse_bencode(&bencode_data);
     __print_parsed_data(parsed);
+    free_be(parsed);
 
     return 0;
 }
