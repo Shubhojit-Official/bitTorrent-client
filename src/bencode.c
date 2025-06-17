@@ -20,12 +20,12 @@ Bencode *__parse_int(const char **data)
 
 Bencode *__parse_string(const char **data)
 {
-    long length = strtol(*data, (char **)data, 10);
+    long long length = strtoll(*data, (char **)data, 10);
     (*data)++; // skip ":"
 
     // Allocate memory of size length+1, +1 for null-terminator
     char *str = (char *)malloc(length + 1);
-    strncpy(str, *data, length); // copy only n char
+    memcpy(str, *data, length); // copy only n char
     str[length] = '\0';
     *data += length; // Move the data pointer
 
@@ -216,14 +216,14 @@ void free_be(Bencode *b)
     free(b);
 }
 
-int main(int argc, char const *argv[])
-{
-    // const char *bencode_data = "di-42e4:spami21e5:Helloli69ei420eed2:Hi3:supee";
-    const char *bencode_data = read_file("./torrents/toa-btd.torrent");
+// int main(int argc, char const *argv[])
+// {
+//     // const char *bencode_data = "di-42e4:spami21e5:Helloli69ei420eed2:Hi3:supee";
+//     const char *bencode_data = read_file("./torrents/toa-btd.torrent");
 
-    Bencode *parsed = parse_bencode(&bencode_data);
-    __print_parsed_data(((parsed->value.dict)[9])->value.dict[7]);
-    free_be(parsed);
+//     Bencode *parsed = parse_bencode(&bencode_data);
+//     __print_parsed_data(((parsed->value.dict)[9])->value.dict[7]);
+//     free_be(parsed);
 
-    return 0;
-}
+//     return 0;
+// }

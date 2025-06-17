@@ -1,6 +1,8 @@
 #ifndef BENCODE_H
 #define BENCODE_H
 
+#include <stddef.h>
+
 // Bencode Data Types
 typedef enum BE_TYPE
 {
@@ -38,5 +40,5 @@ void __print_parsed_data(Bencode *data); // use it to print the parsed data
 Bencode *parse_bencode(const char **data);
 Bencode **get_all_keys(Bencode *be_node);
 void free_be(Bencode *b);
-
+char *read_file(const char *filename);
 #endif
