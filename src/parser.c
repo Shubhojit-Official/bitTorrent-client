@@ -119,14 +119,8 @@ TorrentMeta *extract_torrent_metadata(Bencode *root)
     return meta;
 }
 
-int main()
+void print_torrent_file(TorrentMeta *meta)
 {
-    const char *raw = read_file("./torrents/lies_of_p.torrent");
-    const char *ptr = raw;
-
-    Bencode *parsed = parse_bencode(&ptr);
-    TorrentMeta *meta = extract_torrent_metadata(parsed);
-
     if (meta)
     {
         printf("Announce URL: %s\n", meta->announce);
@@ -151,12 +145,32 @@ int main()
             printf(" (%lld bytes)\n", meta->files[i].length);
         }
     }
+}
 
-    // Clean up
-    free_be(parsed);
+void clean_torrent_mem(TorrentMeta *meta)
+{
+    for (size_t i = 0; i < meta->file_count; ++i)
+    {
+        for (size_t j = 0; j < meta->files[i].path_len; ++j)
+        {
+            free(meta->files[i].path_components[j]);
+        }
+        free(meta->files[i].path_components);
+    }
+    free(meta->files);
     free(meta->announce);
     free(meta->pieces);
     free(meta);
-
-    return 0;
 }
+
+// int main()
+// {
+//     const char *raw = read_file("./torrents/lies_of_p.torrent");
+//     const char *ptr = raw;
+
+//     Bencode *parsed = parse_bencode(&ptr);
+//     TorrentMeta *meta = extract_torrent_metadata(parsed);
+//     print_torrent_file(meta);
+//     clean_torrent_mem(meta);
+//     return 0;
+// }
