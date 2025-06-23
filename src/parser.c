@@ -10,7 +10,7 @@
     @param key: const char* str for a key
     @return value of the associated key (could be a dict as well)
 */
-Bencode *get_value_from_dict(Bencode *dict, const char *key)
+Bencode *__get_value_from_dict(Bencode *dict, const char *key)
 {
     for (size_t i = 0; i < dict->len; i += 2)
     {
@@ -24,7 +24,7 @@ Bencode *get_value_from_dict(Bencode *dict, const char *key)
     return NULL;
 }
 
-static void parse_files_list(Bencode *files_list, TorrentMeta *meta)
+static void __parse_files_list(Bencode *files_list, TorrentMeta *meta)
 {
     size_t num_files = files_list->len;
     meta->files = calloc(num_files, sizeof(TorrentFile));
@@ -34,8 +34,8 @@ static void parse_files_list(Bencode *files_list, TorrentMeta *meta)
     {
         Bencode *file_dict = files_list->value.list[i];
 
-        Bencode *length_b = get_value_from_dict(file_dict, "length");
-        Bencode *path_b = get_value_from_dict(file_dict, "path");
+        Bencode *length_b = __get_value_from_dict(file_dict, "length");
+        Bencode *path_b = __get_value_from_dict(file_dict, "path");
 
         if (length_b && length_b->type == BE_INTEGER &&
             path_b && path_b->type == BE_LIST)
@@ -62,7 +62,7 @@ TorrentMeta *extract_torrent_metadata(Bencode *root)
     TorrentMeta *meta = calloc(1, sizeof(TorrentMeta));
 
     // Announce
-    Bencode *announce = get_value_from_dict(root, "announce");
+    Bencode *announce = __get_value_from_dict(root, "announce");
     if (announce && announce->type == BE_STRING)
     {
         meta->announce = strdup(announce->value.string);
@@ -70,19 +70,19 @@ TorrentMeta *extract_torrent_metadata(Bencode *root)
 
     // Info Dict
 
-    Bencode *info = get_value_from_dict(root, "info");
+    Bencode *info = __get_value_from_dict(root, "info");
     if (!info || info->type != BE_DICT)
         return NULL;
 
     // Piece Length
-    Bencode *piece_len = get_value_from_dict(info, "piece length");
+    Bencode *piece_len = __get_value_from_dict(info, "piece length");
     if (piece_len && piece_len->type == BE_INTEGER)
     {
         meta->piece_length = piece_len->value.integer;
     }
 
     // Pieces
-    Bencode *pieces = get_value_from_dict(info, "pieces");
+    Bencode *pieces = __get_value_from_dict(info, "pieces");
     if (pieces && pieces->type == BE_STRING)
     {
         size_t len = pieces->len;
@@ -92,15 +92,15 @@ TorrentMeta *extract_torrent_metadata(Bencode *root)
     }
 
     // Name
-    Bencode *name = get_value_from_dict(info, "name");
+    Bencode *name = __get_value_from_dict(info, "name");
     if (name && name->type == BE_STRING)
         meta->name = strdup(name->value.string);
 
     // Single or Multi-file
-    Bencode *files = get_value_from_dict(info, "files");
+    Bencode *files = __get_value_from_dict(info, "files");
     if (files && files->type == BE_LIST)
     {
-        parse_files_list(files, meta);
+        __parse_files_list(files, meta);
     }
     else
     {
@@ -108,7 +108,7 @@ TorrentMeta *extract_torrent_metadata(Bencode *root)
         meta->files = calloc(1, sizeof(TorrentFile));
         meta->file_count = 1;
 
-        Bencode *length = get_value_from_dict(info, "length");
+        Bencode *length = __get_value_from_dict(info, "length");
         if (length && length->type == BE_INTEGER)
             meta->files[0].length = length->value.integer;
 
