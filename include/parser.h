@@ -22,10 +22,6 @@ typedef struct
 
 } TorrentMeta;
 
-// Internal Functions
-Bencode *__get_value_from_dict(Bencode *dict, const char *key);
-static void __parse_files_list(Bencode *files_list, TorrentMeta *meta);
-
 // ----APIS----
 TorrentMeta *extract_torrent_metadata(Bencode *root);
 void print_torrent_file(TorrentMeta *meta);

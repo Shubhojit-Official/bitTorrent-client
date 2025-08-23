@@ -163,14 +163,14 @@ void clean_torrent_mem(TorrentMeta *meta)
     free(meta);
 }
 
-// int main()
-// {
-//     const char *raw = read_file("./torrents/lies_of_p.torrent");
-//     const char *ptr = raw;
+int main()
+{
+    const char *raw = read_file("./torrents/Hello_test.txt.torrent");
+    const char *ptr = raw;
 
-//     Bencode *parsed = parse_bencode(&ptr);
-//     TorrentMeta *meta = extract_torrent_metadata(parsed);
-//     print_torrent_file(meta);
-//     clean_torrent_mem(meta);
-//     return 0;
-// }
+    Bencode *parsed = parse_bencode(&ptr);
+    TorrentMeta *meta = extract_torrent_metadata(parsed);
+    print_torrent_file(meta);
+    clean_torrent_mem(meta);
+    return 0;
+}
