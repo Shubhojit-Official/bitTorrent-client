@@ -26,6 +26,8 @@ typedef struct Bencode
     } value;
 
     size_t len;
+    const char *raw_start; // pointer into the original buffer
+    const char *raw_end;   // one past the last byte of this node
 
 } Bencode;
 

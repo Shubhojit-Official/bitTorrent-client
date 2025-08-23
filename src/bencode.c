@@ -5,6 +5,8 @@
 
 Bencode *__parse_int(const char **data)
 {
+    const char *start = *data;
+
     (*data)++; // skip "i"
     long long value = strtoll(*data, (char **)data, 10);
     (*data)++; // skip "e"
@@ -14,12 +16,15 @@ Bencode *__parse_int(const char **data)
     b->type = BE_INTEGER;
     b->value.integer = value;
     b->len = 0;
+    b->raw_start = start;
+    b->raw_end = *data;
 
     return b;
 }
 
 Bencode *__parse_string(const char **data)
 {
+    const char *start = *data;
     long long length = strtoll(*data, (char **)data, 10);
     (*data)++; // skip ":"
 
@@ -34,12 +39,15 @@ Bencode *__parse_string(const char **data)
     b->type = BE_STRING;
     b->value.string = str;
     b->len = length;
+    b->raw_start = start;
+    b->raw_end = *data;
 
     return b;
 }
 
 Bencode *__parse_list(const char **data)
 {
+    const char *start = *data;
     (*data)++; // skips "l"
     Bencode **list = NULL;
     size_t count = 0; // for the count of elements
@@ -56,12 +64,14 @@ Bencode *__parse_list(const char **data)
     b->type = BE_LIST;
     b->value.list = list;
     b->len = count;
-
+    b->raw_start = start;
+    b->raw_end = *data;
     return b;
 }
 
 Bencode *__parse_dict(const char **data)
 {
+    const char *start = *data;
     (*data)++; // Skip the 'd'
 
     Bencode **dict = NULL;
@@ -80,6 +90,8 @@ Bencode *__parse_dict(const char **data)
     b->type = BE_DICT;
     b->value.dict = dict;
     b->len = count;
+    b->raw_start = start;
+    b->raw_end = *data;
 
     return b;
 }
