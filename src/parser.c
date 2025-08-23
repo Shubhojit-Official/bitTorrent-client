@@ -1,6 +1,7 @@
 #include "../include/bencode.h"
 #include "../include/parser.h"
-#include "string.h"
+#include "../include/sha1.h"
+#include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <stddef.h>
@@ -323,6 +324,34 @@ void clean_torrent_mem(TorrentMeta *meta)
     free(meta);
 }
 
+int get_info_hash(Bencode *root, uint8_t out_hash[SHA1_BLOCK_SIZE])
+{
+    if (!root || root->type != BE_DICT)
+        return -1;
+
+    Bencode *info = __get_value_from_dict(root, "info");
+    if (!info || info->type != BE_DICT)
+        return -1;
+
+    size_t len = info->raw_end - info->raw_start;
+
+    sha1((const uint8_t *)info->raw_start, len, out_hash);
+    return 0;
+}
+
+char *get_info_hash_hex(Bencode *root)
+{
+    uint8_t hash[SHA1_BLOCK_SIZE];
+    if (get_info_hash(root, hash) != 0)
+        return NULL;
+
+    char *hex = malloc(41);
+    for (size_t i = 0; i < 20; i++)
+        sprintf(hex + i * 2, "%02x", hash[i]);
+    hex[40] = '\0';
+    return hex;
+}
+
 int main()
 {
     const char *raw = read_file("./torrents/lies_of_p.torrent");
@@ -330,7 +359,17 @@ int main()
 
     Bencode *parsed = parse_bencode(&ptr);
     TorrentMeta *meta = extract_torrent_metadata(parsed);
-    print_torrent_file(meta);
-    clean_torrent_mem(meta);
+
+    char *info_hash_hex = get_info_hash_hex(parsed);
+
+    if (info_hash_hex)
+    {
+        printf("Info Hash: %s\n", info_hash_hex);
+        free(info_hash_hex);
+    }
+
+    free_be(parsed);
+    free((void *)raw);
+
     return 0;
 }
