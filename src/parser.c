@@ -57,46 +57,86 @@ static void __parse_files_list(Bencode *files_list, TorrentMeta *meta)
 TorrentMeta *extract_torrent_metadata(Bencode *root)
 {
     if (!root || root->type != BE_DICT)
+    {
+        fprintf(stderr, "Error: root is not a dictionary\n");
         return NULL;
+    }
 
     TorrentMeta *meta = calloc(1, sizeof(TorrentMeta));
+    if (!meta)
+    {
+        perror("calloc failed");
+        return NULL;
+    }
 
-    // Announce
+    // --- Announce URL ---
     Bencode *announce = __get_value_from_dict(root, "announce");
     if (announce && announce->type == BE_STRING)
     {
         meta->announce = strdup(announce->value.string);
     }
+    else
+    {
+        fprintf(stderr, "Warning: missing or invalid announce URL\n");
+    }
 
-    // Info Dict
-
+    // --- Info Dict ---
     Bencode *info = __get_value_from_dict(root, "info");
     if (!info || info->type != BE_DICT)
+    {
+        fprintf(stderr, "Error: missing or invalid info dictionary\n");
+        free(meta);
         return NULL;
+    }
 
-    // Piece Length
+    // --- Piece Length ---
     Bencode *piece_len = __get_value_from_dict(info, "piece length");
     if (piece_len && piece_len->type == BE_INTEGER)
     {
         meta->piece_length = piece_len->value.integer;
     }
+    else
+    {
+        fprintf(stderr, "Warning: missing or invalid piece length\n");
+    }
 
-    // Pieces
+    // --- Pieces (SHA1 hashes) ---
     Bencode *pieces = __get_value_from_dict(info, "pieces");
     if (pieces && pieces->type == BE_STRING)
     {
+        if (pieces->len % 20 != 0)
+        {
+            fprintf(stderr, "Warning: pieces length (%zu) not divisible by 20\n", pieces->len);
+        }
         size_t len = pieces->len;
         meta->pieces = malloc(len);
+        if (!meta->pieces)
+        {
+            perror("malloc failed");
+            free(meta);
+            return NULL;
+        }
         memcpy(meta->pieces, pieces->value.string, len);
         meta->num_pieces = len / 20;
     }
+    else
+    {
+        fprintf(stderr, "Warning: missing or invalid pieces field\n");
+    }
 
-    // Name
+    // --- Name ---
     Bencode *name = __get_value_from_dict(info, "name");
     if (name && name->type == BE_STRING)
+    {
         meta->name = strdup(name->value.string);
+    }
+    else
+    {
+        fprintf(stderr, "Warning: missing or invalid name\n");
+        meta->name = strdup("unknown"); // fallback
+    }
 
-    // Single or Multi-file
+    // --- Files (multi-file or single-file mode) ---
     Bencode *files = __get_value_from_dict(info, "files");
     if (files && files->type == BE_LIST)
     {
@@ -106,16 +146,43 @@ TorrentMeta *extract_torrent_metadata(Bencode *root)
     {
         // single-file mode fallback
         meta->files = calloc(1, sizeof(TorrentFile));
+        if (!meta->files)
+        {
+            perror("calloc failed");
+            free(meta->pieces);
+            free(meta->announce);
+            free(meta->name);
+            free(meta);
+            return NULL;
+        }
         meta->file_count = 1;
 
         Bencode *length = __get_value_from_dict(info, "length");
         if (length && length->type == BE_INTEGER)
+        {
             meta->files[0].length = length->value.integer;
+        }
+        else
+        {
+            fprintf(stderr, "Warning: missing or invalid file length in single-file mode\n");
+            meta->files[0].length = 0;
+        }
 
         meta->files[0].path_components = malloc(sizeof(char *));
+        if (!meta->files[0].path_components)
+        {
+            perror("malloc failed");
+            free(meta->files);
+            free(meta->pieces);
+            free(meta->announce);
+            free(meta->name);
+            free(meta);
+            return NULL;
+        }
         meta->files[0].path_len = 1;
         meta->files[0].path_components[0] = strdup(meta->name);
     }
+
     return meta;
 }
 
