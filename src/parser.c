@@ -24,33 +24,126 @@ Bencode *__get_value_from_dict(Bencode *dict, const char *key)
     return NULL;
 }
 
+// parser.c
 static void __parse_files_list(Bencode *files_list, TorrentMeta *meta)
 {
-    size_t num_files = files_list->len;
-    meta->files = calloc(num_files, sizeof(TorrentFile));
-    meta->file_count = num_files;
+    if (!files_list || files_list->type != BE_LIST)
+    {
+        fprintf(stderr, "Error: files_list is missing or not a list\n");
+        meta->files = NULL;
+        meta->file_count = 0;
+        return;
+    }
 
-    for (size_t i = 0; i < num_files; ++i)
+    size_t n = files_list->len;
+    meta->files = calloc(n, sizeof(TorrentFile));
+    if (!meta->files)
+    {
+        perror("calloc failed for meta->files");
+        meta->file_count = 0;
+        return;
+    }
+
+    size_t out = 0; // number of valid files we actually record
+
+    for (size_t i = 0; i < n; ++i)
     {
         Bencode *file_dict = files_list->value.list[i];
 
-        Bencode *length_b = __get_value_from_dict(file_dict, "length");
-        Bencode *path_b = __get_value_from_dict(file_dict, "path");
-
-        if (length_b && length_b->type == BE_INTEGER &&
-            path_b && path_b->type == BE_LIST)
+        if (!file_dict || file_dict->type != BE_DICT)
         {
-            meta->files[i].length = length_b->value.integer;
+            fprintf(stderr, "Warning: file entry %zu is not a dict — skipping\n", i);
+            continue;
+        }
 
-            size_t path_len = path_b->len;
-            meta->files[i].path_len = path_len;
-            meta->files[i].path_components = malloc(path_len * sizeof(char *));
+        // length
+        Bencode *length_b = __get_value_from_dict(file_dict, "length");
+        if (!length_b || length_b->type != BE_INTEGER)
+        {
+            fprintf(stderr, "Warning: file entry %zu missing/invalid length — skipping\n", i);
+            continue;
+        }
 
-            for (size_t j = 0; j < path_len; ++j)
+        // path (list of strings)
+        Bencode *path_b = __get_value_from_dict(file_dict, "path");
+        if (!path_b || path_b->type != BE_LIST || path_b->len == 0)
+        {
+            fprintf(stderr, "Warning: file entry %zu missing/invalid path — skipping\n", i);
+            continue;
+        }
+
+        // Validate all path components first
+        size_t path_len = path_b->len;
+        int bad = 0;
+        for (size_t j = 0; j < path_len; ++j)
+        {
+            Bencode *pc = path_b->value.list[j];
+            if (!pc || pc->type != BE_STRING)
             {
-                meta->files[i].path_components[j] = strdup(path_b->value.list[j]->value.string);
+                fprintf(stderr, "Warning: file entry %zu has non-string path component at %zu — skipping\n", i, j);
+                bad = 1;
+                break;
             }
         }
+        if (bad)
+            continue;
+
+        // Allocate and copy path components
+        char **components = (char **)malloc(path_len * sizeof(char *));
+        if (!components)
+        {
+            perror("malloc failed for path components");
+            // We cannot partially fill meta; just skip this file.
+            continue;
+        }
+
+        size_t copied = 0;
+        for (size_t j = 0; j < path_len; ++j)
+        {
+            const char *src = path_b->value.list[j]->value.string;
+            components[j] = strdup(src);
+            if (!components[j])
+            {
+                perror("strdup failed for path component");
+                // Roll back the ones we already duplicated
+                for (size_t k = 0; k < j; ++k)
+                    free(components[k]);
+                free(components);
+                components = NULL;
+                break;
+            }
+            copied++;
+        }
+        if (!components)
+        {
+            // Skip this file due to allocation failure
+            continue;
+        }
+
+        // Populate the output file entry
+        meta->files[out].length = length_b->value.integer;
+        meta->files[out].path_len = path_len;
+        meta->files[out].path_components = components;
+        out++;
+    }
+
+    // If some entries were skipped, shrink the array
+    if (out == 0)
+    {
+        // No valid files — free the array and leave empty
+        free(meta->files);
+        meta->files = NULL;
+        meta->file_count = 0;
+    }
+    else
+    {
+        if (out < n)
+        {
+            TorrentFile *shrunk = realloc(meta->files, out * sizeof(TorrentFile));
+            if (shrunk)
+                meta->files = shrunk; // if realloc fails, keep original (still valid)
+        }
+        meta->file_count = out;
     }
 }
 
@@ -232,7 +325,7 @@ void clean_torrent_mem(TorrentMeta *meta)
 
 int main()
 {
-    const char *raw = read_file("./torrents/Hello_test.txt.torrent");
+    const char *raw = read_file("./torrents/lies_of_p.torrent");
     const char *ptr = raw;
 
     Bencode *parsed = parse_bencode(&ptr);
