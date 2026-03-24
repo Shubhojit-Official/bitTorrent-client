@@ -362,6 +362,8 @@ int main()
 
     char *info_hash_hex = get_info_hash_hex(parsed);
 
+    printf("Announce: %s\n", meta->announce);
+
     if (info_hash_hex)
     {
         printf("Info Hash: %s\n", info_hash_hex);

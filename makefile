@@ -3,7 +3,7 @@
 ##############################################################
 
 CC = gcc
-CFLAGS = -Wall -g
+CFLAGS = -Wall -g -lws2_32
 
 EXEC_NAME = app
 OBJDIR = obj
