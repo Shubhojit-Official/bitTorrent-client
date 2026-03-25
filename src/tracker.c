@@ -121,3 +121,25 @@ static int parse_udp_url(const char *url,
     *port_out = (uint16_t)port_val;
     return 0;
 }
+
+//-----------------------------------------------------
+// WINSOCK LIFECYLCE (must init once)
+//-----------------------------------------------------
+
+int tracker_init(void)
+{
+    WSADATA wsa;
+    int err = WSAStartup(MAKEWORD(2, 2), &wsa);
+    if (err != 0)
+    {
+        fprintf(stderr, "WSAStartup failed with error: %d\n", err);
+        return -1;
+    }
+
+    return 0;
+}
+
+void tracker_cleanup(void)
+{
+    WSACleanup();
+}
