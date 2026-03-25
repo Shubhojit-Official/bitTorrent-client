@@ -69,4 +69,7 @@ void print_tracker_response(const TrackerResponse *resp);
 
 void free_tracker_response(TrackerResponse *resp);
 
+// Returns 1 if the response contains at least one public (non-RFC1918) peer
+int has_public_peers(const TrackerResponse *resp);
+
 #endif

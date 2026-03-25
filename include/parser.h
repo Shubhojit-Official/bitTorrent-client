@@ -23,10 +23,10 @@ typedef struct
     char *name;
     TorrentFile *files;
     size_t file_count;
-
 } TorrentMeta;
 
 // ----APIS----
+Bencode *__get_value_from_dict(Bencode *dict, const char *key);
 TorrentMeta *extract_torrent_metadata(Bencode *root);
 void print_torrent_file(TorrentMeta *meta);
 void clean_torrent_mem(TorrentMeta *meta);
