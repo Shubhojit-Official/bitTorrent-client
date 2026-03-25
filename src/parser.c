@@ -351,27 +351,3 @@ char *get_info_hash_hex(Bencode *root)
     hex[40] = '\0';
     return hex;
 }
-
-int main()
-{
-    const char *raw = read_file("./torrents/lies_of_p.torrent");
-    const char *ptr = raw;
-
-    Bencode *parsed = parse_bencode(&ptr);
-    TorrentMeta *meta = extract_torrent_metadata(parsed);
-
-    char *info_hash_hex = get_info_hash_hex(parsed);
-
-    printf("Announce: %s\n", meta->announce);
-
-    if (info_hash_hex)
-    {
-        printf("Info Hash: %s\n", info_hash_hex);
-        free(info_hash_hex);
-    }
-
-    free_be(parsed);
-    free((void *)raw);
-
-    return 0;
-}

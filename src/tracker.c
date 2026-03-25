@@ -75,9 +75,10 @@ static uint64_t read_u64(const uint8_t *b)
            ((uint64_t)b[4] << 24) | ((uint64_t)b[5] << 16) |
            ((uint64_t)b[6] << 8) | (uint64_t)b[7];
 }
-
+//---------------------------------------------------------------
 // URL parser
 // Handles "udp://hostname:port/path" -> extracts host and port.
+//---------------------------------------------------------------
 
 static int parse_udp_url(const char *url,
                          char *host_out,
@@ -91,7 +92,7 @@ static int parse_udp_url(const char *url,
     }
 
     const char *p = url + 6;            // points past "udp://"
-    const char *colon = strchr(p, ":"); // separator btw host and port
+    const char *colon = strchr(p, ':'); // separator btw host and port
 
     if (!colon)
     {
@@ -107,7 +108,7 @@ static int parse_udp_url(const char *url,
     }
 
     memcpy(host_out, p, host_len);
-    host_out[host_len] = "\0";
+    host_out[host_len] = '\0';
 
     // extract port no right after ":"
 
@@ -142,4 +143,347 @@ int tracker_init(void)
 void tracker_cleanup(void)
 {
     WSACleanup();
+}
+
+//------------------------------------------------------------
+// Peer ID generation
+// Azureus style: "-SG0001-" prefix + 12 random decimal digits
+//------------------------------------------------------------
+
+void generate_peer_id(uint8_t peer_id[20])
+{
+    srand((unsigned int)time(NULL));
+    memcpy(peer_id, "-SG0001-", 8);
+    for (int i = 8; i < 20; i++)
+        peer_id[i] = (uint8_t)('0' + rand() % 10);
+}
+
+//------------------------
+// Main Public Function
+//------------------------
+
+TrackerResponse *announce_udp(
+    const char *url,
+    const uint8_t info_hash[20],
+    const uint8_t peer_id[20],
+    uint64_t left,
+    uint16_t listen_port)
+{
+    // Parse URL
+    char host[256];
+    uint16_t tracker_port;
+
+    if (parse_udp_url(url, host, sizeof(host), &tracker_port) != 0)
+        return NULL;
+
+    // Resolve hostname
+    struct addrinfo hints = {0};
+    hints.ai_family = AF_INET; // IPv4 only rn
+    hints.ai_socktype = SOCK_DGRAM;
+    hints.ai_protocol = IPPROTO_UDP;
+
+    char port_str[8];
+    snprintf(port_str, sizeof(port_str), "%u", tracker_port);
+
+    struct addrinfo *res = NULL;
+    if (getaddrinfo(host, port_str, &hints, &res) != 0)
+    {
+        fprintf(stderr, "tracker: getaddrinfo failed for %s: %d", host, WSAGetLastError());
+        freeaddrinfo(res);
+        return NULL;
+    }
+
+    // Create UDP socket
+    SOCKET sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (sock == INVALID_SOCKET)
+    {
+        fprintf(stderr, "tracker: socket() failed: %d\n", WSAGetLastError());
+        freeaddrinfo(res);
+        return NULL;
+    }
+
+    // Connect handshake with exponential back-off retry
+
+    // Connect request layout (16 bytes, all big-endian):
+    //   [0 .. 7]  connection_id  = CONNECT_MAGIC (8 bytes)
+    //   [8 .. 11] action         = 0 (connect) (4 bytes)
+    //   [12..15]  transaction_id = random (4 bytes)
+    //
+    // Connect response layout (16 bytes):
+    //   [0 .. 3]  action         = 0 (4 bytes)
+    //   [4 .. 7]  transaction_id (must match ours) (4 bytes)
+    //   [8 ..15]  connection_id  (save this for the announce) (8 bytes)
+
+    uint64_t connection_id = 0;
+    int connected = 0;
+    uint32_t con_txn_id = (uint32_t)rand();
+
+    for (int attempt = 0; attempt < MAX_RETRIES && !connected; attempt++)
+    {
+        // Set receive timeout: 15s, 30s, 60s, 120s
+        DWORD timeout_ms = (DWORD)(BASE_TIMEOUT_MS * (1u << attempt));
+        setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO,
+                   (const char *)&timeout_ms, sizeof(timeout_ms));
+
+        // Build and send connect request
+        uint8_t con_req[16];
+        write_u64(con_req, CONNECT_MAGIC);
+        write_u32(con_req + 8, ACTION_CONNECT);
+        write_u32(con_req + 12, con_txn_id);
+
+        int sent = sendto(sock, (char *)con_req, 16, 0,
+                          res->ai_addr, (int)res->ai_addrlen);
+        if (sent != 16)
+        {
+            fprintf(stderr, "tracker: sendto (connect) failed on attempt %d: %d\n",
+                    attempt + 1, WSAGetLastError());
+            continue;
+        }
+
+        // Wait for connect response
+        uint8_t con_resp[16];
+        int n = recvfrom(sock, (char *)con_resp, sizeof(con_resp), 0, NULL, NULL);
+        if (n < 16)
+        {
+            fprintf(stderr, "tracker: connect response timeout/error on attempt %d\n",
+                    attempt + 1);
+            continue;
+        }
+
+        uint32_t resp_action = read_u32(con_resp);
+        uint32_t resp_txn = read_u32(con_resp + 4);
+
+        // Check for error response from  tracker
+
+        if (resp_action == ACTION_ERROR)
+        {
+            fprintf(stderr, "tracker: error response on connect\n");
+            break;
+        }
+
+        if (resp_action != ACTION_CONNECT || resp_txn != con_txn_id)
+        {
+            fprintf(stderr, "tracker: unexpected connect response "
+                            "(action=%u, txn=%u, expected txn=%u)\n",
+                    resp_action, resp_txn, con_txn_id);
+            continue;
+        }
+
+        connection_id = read_u64(con_resp + 8);
+        connected = 1;
+        printf("tracker: connected (connection_id = %llu)\n",
+               (unsigned long long)connection_id);
+    }
+    if (!connected)
+    {
+        fprintf(stderr, "tracker: failed to connect after %d attempts\n", MAX_RETRIES);
+        closesocket(sock);
+        freeaddrinfo(res);
+        return NULL;
+    }
+
+    // Send Announce request(98 bytes, all big - endian)
+    //
+    //    [0  .. 7 ] connection_id
+    //    [8  .. 11] action         = 1 (announce)
+    //    [12 .. 15] transaction_id = random (new one)
+    //    [16 .. 35] info_hash      (20 bytes)
+    //    [36 .. 55] peer_id        (20 bytes)
+    //    [56 .. 63] downloaded     = 0 (starting fresh)
+    //    [64 .. 71] left
+    //    [72 .. 79] uploaded       = 0
+    //    [80 .. 83] event          = 2 (started)
+    //    [84 .. 87] ip             = 0 (tracker uses sender IP)
+    //    [88 .. 91] key            = random (identifies you across reconnects)
+    //    [92 .. 95] num_want       = -1 (default, tracker decides count)
+    //    [96 .. 97] port           (your listen port)
+
+    // Reset timeout to base for announce
+    DWORD ann_timeout = BASE_TIMEOUT_MS;
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO,
+               (const char *)&ann_timeout, sizeof(ann_timeout));
+
+    uint32_t ann_txn_id = (uint32_t)rand();
+    uint8_t ann_req[98];
+    memset(ann_req, 0, sizeof(ann_req));
+
+    int off = 0;
+    write_u64(ann_req + off, connection_id);
+    off += 8;
+    write_u32(ann_req + off, ACTION_ANNOUNCE);
+    off += 4;
+    write_u32(ann_req + off, ann_txn_id);
+    off += 4;
+    memcpy(ann_req + off, info_hash, 20);
+    off += 20;
+    memcpy(ann_req + off, peer_id, 20);
+    off += 20;
+    write_u64(ann_req + off, 0);
+    off += 8; // downloaded
+    write_u64(ann_req + off, left);
+    off += 8; // left
+    write_u64(ann_req + off, 0);
+    off += 8; // uploaded
+    write_u32(ann_req + off, EVENT_STARTED);
+    off += 4;
+    write_u32(ann_req + off, 0);
+    off += 4; // ip (0 = auto)
+    write_u32(ann_req + off, (uint32_t)rand());
+    off += 4; // key
+    write_u32(ann_req + off, (uint32_t)-1);
+    off += 4;                              // num_want
+    write_u16(ann_req + off, listen_port); // port (2 bytes)
+
+    int sent = sendto(sock, (char *)ann_req, 98, 0,
+                      res->ai_addr, (int)res->ai_addrlen);
+
+    if (sent != 98)
+    {
+        fprintf(stderr, "tracker: sendto (announce) failed: %d\n", WSAGetLastError());
+        closesocket(sock);
+        freeaddrinfo(res);
+        return NULL;
+    }
+
+    //  Receive Announce response
+    //
+    //   [0  .. 3 ] action         = 1
+    //   [4  .. 7 ] transaction_id (must match)
+    //   [8  .. 11] interval
+    //   [12 .. 15] leechers
+    //   [16 .. 19] seeders
+    //   [20 ..   ] peers: 6 bytes each (4 bytes IP + 2 bytes port)
+
+    // 20 byte header + 6 bytes per peer
+    uint8_t ann_resp[20 + 6 * MAX_PEERS];
+    int n = recvfrom(sock, (char *)ann_resp, sizeof(ann_resp), 0, NULL, NULL);
+
+    if (n < 20)
+    {
+        fprintf(stderr, "tracker: announce response too short (%d bytes) or timeout\n", n);
+        closesocket(sock);
+        freeaddrinfo(res);
+        return NULL;
+    }
+
+    uint32_t resp_action = read_u32(ann_resp);
+    uint32_t resp_txn = read_u32(ann_resp + 4);
+
+    if (resp_action == ACTION_ERROR)
+    {
+        // Tracker sent a human-readable error message after the header
+        int msg_len = n - 8;
+        if (msg_len > 0)
+            fprintf(stderr, "tracker error: %.*s\n", msg_len, (char *)(ann_resp + 8));
+        else
+            fprintf(stderr, "tracker: error action received\n");
+        closesocket(sock);
+        freeaddrinfo(res);
+        return NULL;
+    }
+
+    // Parse the resone into TrackerResponse
+    TrackerResponse *tr = calloc(1, sizeof(TrackerResponse));
+    if (!tr)
+    {
+        closesocket(sock);
+        freeaddrinfo(res);
+        return NULL;
+    }
+
+    tr->interval = read_u32(ann_resp + 8);
+    tr->leechers = read_u32(ann_resp + 12);
+    tr->seeders = read_u32(ann_resp + 16);
+
+    int peer_bytes = n - 20; // bytes after the fixed header
+    tr->peer_count = (size_t)(peer_bytes / 6);
+
+    tr->peers = calloc(tr->peer_count, sizeof(Peer));
+    if (!tr->peers)
+    {
+        free(tr);
+        closesocket(sock);
+        freeaddrinfo(res);
+        return NULL;
+    }
+
+    for (size_t i = 0; i < tr->peer_count; i++)
+    {
+        const uint8_t *p = ann_resp + 20 + i * 6;
+        // IP: 4 bytes big-endian  ->  host byte order
+        tr->peers[i].ip =
+            ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) |
+            ((uint32_t)p[2] << 8) | (uint32_t)p[3];
+        // Port: 2 bytes big-endian  ->  host byte order
+        tr->peers[i].port = ((uint16_t)p[4] << 8) | p[5];
+    }
+
+    closesocket(sock);
+    freeaddrinfo(res);
+    return tr;
+}
+
+int has_public_peers(const TrackerResponse *resp)
+{
+    if (!resp || resp->peer_count == 0)
+        return 0;
+
+    for (size_t i = 0; i < resp->peer_count; i++)
+    {
+        uint32_t ip = resp->peers[i].ip;
+        uint8_t a = (ip >> 24) & 0xFF;
+        uint8_t b = (ip >> 16) & 0xFF;
+
+        int is_private =
+            (a == 10) ||
+            (a == 172 && b >= 16 && b <= 31) ||
+            (a == 192 && b == 168) ||
+            (a == 127) ||
+            (a == 0);
+
+        if (!is_private)
+            return 1;
+    }
+    return 0;
+}
+
+// -----------------
+//  Debug print
+// -----------------
+
+void print_tracker_response(const TrackerResponse *resp)
+{
+    if (!resp)
+    {
+        printf("TrackerResponse: NULL\n");
+        return;
+    }
+    printf("Interval : %u seconds\n", resp->interval);
+    printf("Seeders  : %u\n", resp->seeders);
+    printf("Leechers : %u\n", resp->leechers);
+    printf("Peers    : %zu\n", resp->peer_count);
+
+    for (size_t i = 0; i < resp->peer_count; i++)
+    {
+        uint32_t ip = resp->peers[i].ip;
+        printf("  [%3zu] %u.%u.%u.%u:%u\n",
+               i,
+               (ip >> 24) & 0xFF,
+               (ip >> 16) & 0xFF,
+               (ip >> 8) & 0xFF,
+               (ip) & 0xFF,
+               resp->peers[i].port);
+    }
+}
+
+//------------------
+//  Cleanup
+//------------------
+
+void free_tracker_response(TrackerResponse *resp)
+{
+    if (!resp)
+        return;
+    free(resp->peers);
+    free(resp);
 }
