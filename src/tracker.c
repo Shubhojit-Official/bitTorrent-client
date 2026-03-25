@@ -75,3 +75,49 @@ static uint64_t read_u64(const uint8_t *b)
            ((uint64_t)b[4] << 24) | ((uint64_t)b[5] << 16) |
            ((uint64_t)b[6] << 8) | (uint64_t)b[7];
 }
+
+// URL parser
+// Handles "udp://hostname:port/path" -> extracts host and port.
+
+static int parse_udp_url(const char *url,
+                         char *host_out,
+                         size_t host_size,
+                         uint16_t *port_out)
+{
+    if (strncmp(url, "udp://", 6) != 0)
+    {
+        fprintf(stderr, "tracker: not a UDP URL: %s\n", url);
+        return -1;
+    }
+
+    const char *p = url + 6;            // points past "udp://"
+    const char *colon = strchr(p, ":"); // separator btw host and port
+
+    if (!colon)
+    {
+        fprintf(stderr, "tracker: missing port in URL: %s\n", url);
+        return -1;
+    }
+
+    size_t host_len = (size_t)(colon - p);
+    if (host_len == 0 || host_len >= host_size)
+    {
+        fprintf(stderr, "tracker: host length invalid \n");
+        return -1;
+    }
+
+    memcpy(host_out, p, host_len);
+    host_out[host_len] = "\0";
+
+    // extract port no right after ":"
+
+    int port_val = atoi(colon + 1);
+    if (port_val <= 0 || port_val > 65535)
+    {
+        fprintf(stderr, "tracker: invalid port in URL: %s\n", url);
+        return -1;
+    }
+
+    *port_out = (uint16_t)port_val;
+    return 0;
+}
