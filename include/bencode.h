@@ -4,30 +4,22 @@
 #include <stddef.h>
 
 // Bencode Data Types
-typedef enum BE_TYPE
-{
-    BE_STRING,
-    BE_INTEGER,
-    BE_LIST,
-    BE_DICT
-} BE_TYPE;
+typedef enum BE_TYPE { BE_STRING, BE_INTEGER, BE_LIST, BE_DICT } BE_TYPE;
 
 // Stores the Type and the data which could be str,int or other bencode data
-typedef struct Bencode
-{
-    BE_TYPE type;
+typedef struct Bencode {
+  BE_TYPE type;
 
-    union value
-    {
-        char *string;
-        long long integer;
-        struct Bencode **list;
-        struct Bencode **dict;
-    } value;
+  union value {
+    char *string;
+    long long integer;
+    struct Bencode **list;
+    struct Bencode **dict;
+  } value;
 
-    size_t len;
-    const char *raw_start; // pointer into the original buffer
-    const char *raw_end;   // one past the last byte of this node
+  size_t len;
+  const char *raw_start; // pointer into the original buffer
+  const char *raw_end;   // one past the last byte of this node
 
 } Bencode;
 
