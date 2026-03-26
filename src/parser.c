@@ -11,7 +11,8 @@
     @param key: const char* str for a key
     @return value of the associated key (could be a dict as well)
 */
-Bencode *__get_value_from_dict(Bencode *dict, const char *key) {
+Bencode *__get_value_from_dict(Bencode *dict, const char *key)
+{
   for (size_t i = 0; i < dict->len; i += 2) {
     Bencode *k = dict->value.dict[i];
     if (k->type == BE_STRING && strcmp(k->value.string, key) == 0) {
@@ -23,7 +24,8 @@ Bencode *__get_value_from_dict(Bencode *dict, const char *key) {
 }
 
 // parser.c
-static void __parse_files_list(Bencode *files_list, TorrentMeta *meta) {
+static void __parse_files_list(Bencode *files_list, TorrentMeta *meta)
+{
   if (!files_list || files_list->type != BE_LIST) {
     fprintf(stderr, "Error: files_list is missing or not a list\n");
     meta->files = NULL;
@@ -123,7 +125,8 @@ static void __parse_files_list(Bencode *files_list, TorrentMeta *meta) {
     free(meta->files);
     meta->files = NULL;
     meta->file_count = 0;
-  } else {
+  }
+  else {
     if (out < n) {
       TorrentFile *shrunk = realloc(meta->files, out * sizeof(TorrentFile));
       if (shrunk)
@@ -133,7 +136,8 @@ static void __parse_files_list(Bencode *files_list, TorrentMeta *meta) {
   }
 }
 
-TorrentMeta *extract_torrent_metadata(Bencode *root) {
+TorrentMeta *extract_torrent_metadata(Bencode *root)
+{
   if (!root || root->type != BE_DICT) {
     fprintf(stderr, "Error: root is not a dictionary\n");
     return NULL;
@@ -149,7 +153,8 @@ TorrentMeta *extract_torrent_metadata(Bencode *root) {
   Bencode *announce = __get_value_from_dict(root, "announce");
   if (announce && announce->type == BE_STRING) {
     meta->announce = strdup(announce->value.string);
-  } else {
+  }
+  else {
     fprintf(stderr, "Warning: missing or invalid announce URL\n");
   }
 
@@ -165,7 +170,8 @@ TorrentMeta *extract_torrent_metadata(Bencode *root) {
   Bencode *piece_len = __get_value_from_dict(info, "piece length");
   if (piece_len && piece_len->type == BE_INTEGER) {
     meta->piece_length = piece_len->value.integer;
-  } else {
+  }
+  else {
     fprintf(stderr, "Warning: missing or invalid piece length\n");
   }
 
@@ -185,7 +191,8 @@ TorrentMeta *extract_torrent_metadata(Bencode *root) {
     }
     memcpy(meta->pieces, pieces->value.string, len);
     meta->num_pieces = len / 20;
-  } else {
+  }
+  else {
     fprintf(stderr, "Warning: missing or invalid pieces field\n");
   }
 
@@ -193,7 +200,8 @@ TorrentMeta *extract_torrent_metadata(Bencode *root) {
   Bencode *name = __get_value_from_dict(info, "name");
   if (name && name->type == BE_STRING) {
     meta->name = strdup(name->value.string);
-  } else {
+  }
+  else {
     fprintf(stderr, "Warning: missing or invalid name\n");
     meta->name = strdup("unknown"); // fallback
   }
@@ -202,7 +210,8 @@ TorrentMeta *extract_torrent_metadata(Bencode *root) {
   Bencode *files = __get_value_from_dict(info, "files");
   if (files && files->type == BE_LIST) {
     __parse_files_list(files, meta);
-  } else {
+  }
+  else {
     // single-file mode fallback
     meta->files = calloc(1, sizeof(TorrentFile));
     if (!meta->files) {
@@ -218,7 +227,8 @@ TorrentMeta *extract_torrent_metadata(Bencode *root) {
     Bencode *length = __get_value_from_dict(info, "length");
     if (length && length->type == BE_INTEGER) {
       meta->files[0].length = length->value.integer;
-    } else {
+    }
+    else {
       fprintf(stderr,
               "Warning: missing or invalid file length in single-file mode\n");
       meta->files[0].length = 0;
@@ -241,7 +251,8 @@ TorrentMeta *extract_torrent_metadata(Bencode *root) {
   return meta;
 }
 
-void print_torrent_file(TorrentMeta *meta) {
+void print_torrent_file(TorrentMeta *meta)
+{
   if (meta) {
     printf("Announce URL: %s\n", meta->announce);
     printf("Piece Length: %lld\n", meta->piece_length);
@@ -264,7 +275,8 @@ void print_torrent_file(TorrentMeta *meta) {
   }
 }
 
-void clean_torrent_mem(TorrentMeta *meta) {
+void clean_torrent_mem(TorrentMeta *meta)
+{
   for (size_t i = 0; i < meta->file_count; ++i) {
     for (size_t j = 0; j < meta->files[i].path_len; ++j) {
       free(meta->files[i].path_components[j]);
@@ -277,7 +289,8 @@ void clean_torrent_mem(TorrentMeta *meta) {
   free(meta);
 }
 
-int get_info_hash(Bencode *root, uint8_t out_hash[SHA1_BLOCK_SIZE]) {
+int get_info_hash(Bencode *root, uint8_t out_hash[SHA1_BLOCK_SIZE])
+{
   if (!root || root->type != BE_DICT)
     return -1;
 
@@ -291,7 +304,8 @@ int get_info_hash(Bencode *root, uint8_t out_hash[SHA1_BLOCK_SIZE]) {
   return 0;
 }
 
-char *get_info_hash_hex(Bencode *root) {
+char *get_info_hash_hex(Bencode *root)
+{
   uint8_t hash[SHA1_BLOCK_SIZE];
   if (get_info_hash(root, hash) != 0)
     return NULL;

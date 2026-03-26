@@ -36,19 +36,22 @@
 // also makes the code easy to follow against the spec
 //-----------------------------------------------------
 
-static void write_u16(uint8_t *b, uint16_t v) {
+static void write_u16(uint8_t *b, uint16_t v)
+{
   b[0] = (v >> 8) & 0xFF;
   b[1] = (v) & 0xFF;
 }
 
-static void write_u32(uint8_t *b, uint32_t v) {
+static void write_u32(uint8_t *b, uint32_t v)
+{
   b[0] = (v >> 24) & 0xFF;
   b[1] = (v >> 16) & 0xFF;
   b[2] = (v >> 8) & 0xFF;
   b[3] = (v) & 0xFF;
 }
 
-static void write_u64(uint8_t *b, uint64_t v) {
+static void write_u64(uint8_t *b, uint64_t v)
+{
   b[0] = (v >> 56) & 0xFF;
   b[1] = (v >> 48) & 0xFF;
   b[2] = (v >> 40) & 0xFF;
@@ -59,12 +62,14 @@ static void write_u64(uint8_t *b, uint64_t v) {
   b[7] = (v) & 0xFF;
 }
 
-static uint32_t read_u32(const uint8_t *b) {
+static uint32_t read_u32(const uint8_t *b)
+{
   return ((uint32_t)b[0] << 24) | ((uint32_t)b[1] << 16) |
          ((uint32_t)b[2] << 8) | (uint32_t)b[3];
 }
 
-static uint64_t read_u64(const uint8_t *b) {
+static uint64_t read_u64(const uint8_t *b)
+{
   return ((uint64_t)b[0] << 56) | ((uint64_t)b[1] << 48) |
          ((uint64_t)b[2] << 40) | ((uint64_t)b[3] << 32) |
          ((uint64_t)b[4] << 24) | ((uint64_t)b[5] << 16) |
@@ -76,7 +81,8 @@ static uint64_t read_u64(const uint8_t *b) {
 //---------------------------------------------------------------
 
 static int parse_udp_url(const char *url, char *host_out, size_t host_size,
-                         uint16_t *port_out) {
+                         uint16_t *port_out)
+{
   if (strncmp(url, "udp://", 6) != 0) {
     fprintf(stderr, "tracker: not a UDP URL: %s\n", url);
     return -1;
@@ -115,7 +121,8 @@ static int parse_udp_url(const char *url, char *host_out, size_t host_size,
 // WINSOCK LIFECYLCE (must init once)
 //-----------------------------------------------------
 
-int tracker_init(void) {
+int tracker_init(void)
+{
   WSADATA wsa;
   int err = WSAStartup(MAKEWORD(2, 2), &wsa);
   if (err != 0) {
@@ -133,7 +140,8 @@ void tracker_cleanup(void) { WSACleanup(); }
 // Azureus style: "-SG0001-" prefix + 12 random decimal digits
 //------------------------------------------------------------
 
-void generate_peer_id(uint8_t peer_id[20]) {
+void generate_peer_id(uint8_t peer_id[20])
+{
   srand((unsigned int)time(NULL));
   memcpy(peer_id, "-SG0001-", 8);
   for (int i = 8; i < 20; i++)
@@ -146,7 +154,8 @@ void generate_peer_id(uint8_t peer_id[20]) {
 
 TrackerResponse *announce_udp(const char *url, const uint8_t info_hash[20],
                               const uint8_t peer_id[20], uint64_t left,
-                              uint16_t listen_port) {
+                              uint16_t listen_port)
+{
   // Parse URL
   char host[256];
   uint16_t tracker_port;
@@ -391,7 +400,8 @@ TrackerResponse *announce_udp(const char *url, const uint8_t info_hash[20],
   return tr;
 }
 
-int has_public_peers(const TrackerResponse *resp) {
+int has_public_peers(const TrackerResponse *resp)
+{
   if (!resp || resp->peer_count == 0)
     return 0;
 
@@ -413,7 +423,8 @@ int has_public_peers(const TrackerResponse *resp) {
 //  Debug print
 // -----------------
 
-void print_tracker_response(const TrackerResponse *resp) {
+void print_tracker_response(const TrackerResponse *resp)
+{
   if (!resp) {
     printf("TrackerResponse: NULL\n");
     return;
@@ -434,7 +445,8 @@ void print_tracker_response(const TrackerResponse *resp) {
 //  Cleanup
 //------------------
 
-void free_tracker_response(TrackerResponse *resp) {
+void free_tracker_response(TrackerResponse *resp)
+{
   if (!resp)
     return;
   free(resp->peers);

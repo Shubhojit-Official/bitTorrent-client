@@ -5,7 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-int main() {
+int main()
+{
   if (tracker_init() != 0)
     return 1;
 
@@ -32,14 +33,16 @@ int main() {
 
   if (resp && has_public_peers(resp)) {
     printf("Got public peers from primary tracker.\n");
-  } else {
+  }
+  else {
     // Primary failed or returned only private IPs — try announce-list
     if (resp) {
       printf("Primary tracker returned only private IPs, trying "
              "announce-list...\n");
       free_tracker_response(resp);
       resp = NULL;
-    } else {
+    }
+    else {
       printf("Primary tracker failed, trying announce-list...\n");
     }
 
@@ -72,13 +75,15 @@ int main() {
           if (r && has_public_peers(r)) {
             printf("Got public peers from: %s\n", url);
             resp = r;
-          } else {
+          }
+          else {
             if (r)
               free_tracker_response(r);
           }
         }
       }
-    } else {
+    }
+    else {
       printf("No announce-list found in torrent.\n");
     }
   }
@@ -87,7 +92,8 @@ int main() {
   if (resp) {
     print_tracker_response(resp);
     free_tracker_response(resp);
-  } else {
+  }
+  else {
     printf("Could not get public peers from any tracker.\n");
   }
 

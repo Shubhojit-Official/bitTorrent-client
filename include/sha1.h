@@ -6,12 +6,11 @@
 
 #define SHA1_BLOCK_SIZE 20 // 160 bits
 
-typedef struct
-{
-    uint32_t state[5];
-    uint64_t bitlen;
-    uint8_t buffer[64];
-    size_t buffer_len;
+typedef struct {
+  uint32_t state[5];
+  uint64_t bitlen;
+  uint8_t buffer[64];
+  size_t buffer_len;
 } SHA1_CTX;
 
 void sha1_init(SHA1_CTX *ctx);
