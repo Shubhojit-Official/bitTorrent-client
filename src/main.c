@@ -1,6 +1,7 @@
 #include "../include/tracker.h"
 #include "../include/bencode.h"
 #include "../include/parser.h"
+#include "../include/peer.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -96,6 +97,46 @@ int main()
   else {
     printf("Could not get public peers from any tracker.\n");
   }
+
+  PeerConnection *conn = NULL;
+  for (size_t i = 0; i < resp->peer_count; i++) {
+    conn = peer_connect(resp->peers[i].ip, resp->peers[i].port);
+    if (!conn)
+      continue;
+
+    if (peer_handshake(conn, info_hash, peer_id) != 0) {
+      peer_disconnect(conn);
+      conn = NULL;
+      continue;
+    }
+    break; // got a working peer
+  }
+
+  if (!conn) {
+    printf("Could not connect to any peer\n");
+    // cleanup...
+    return 1;
+  }
+
+  // Wait for bitfield message from peer (usually sent right after handshake)
+  PeerMessage *msg = peer_recv_message(conn);
+  if (msg && msg->id == MSG_BITFIELD) {
+    conn->bitfield = (uint8_t *)malloc(msg->payload_len);
+    conn->bitfield_bytes = msg->payload_len;
+    memcpy(conn->bitfield, msg->payload, msg->payload_len);
+    printf("Got bitfield from peer\n");
+    free_peer_message(msg);
+  }
+
+  // Download piece 0 as a test
+  uint32_t piece_len = (uint32_t)meta->piece_length;
+  uint8_t *buf = malloc(piece_len);
+
+  if (peer_download_piece(conn, 0, piece_len, buf) == 0)
+    printf("Piece 0 downloaded successfully!\n");
+
+  free(buf);
+  peer_disconnect(conn);
 
   free_be(parsed);
   free((void *)raw);

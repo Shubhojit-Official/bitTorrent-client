@@ -1,6 +1,7 @@
 #ifndef PEER_H
 #define PEER_H
 
+#include <winsock2.h>
 #include "../include/parser.h"
 #include "../include/tracker.h"
 #include <stddef.h>
@@ -66,5 +67,72 @@ typedef struct {
   uint8_t *bitfield;
   size_t bitfield_bytes;
 } PeerConnection;
+
+// ============================================================
+//  API
+// ============================================================
+
+/*
+ * peer_connect
+ * Opens a TCP connection to the given peer.
+ * Returns a heap-allocated PeerConnection on success, NULL on failure.
+ */
+PeerConnection *peer_connect(uint32_t ip, uint16_t port);
+
+/*
+ * peer_handshake
+ * Sends our handshake and receives + validates the peer's handshake.
+ * Returns 0 on success, -1 on failure (wrong info_hash, timeout, etc.)
+ */
+int peer_handshake(PeerConnection *conn, const uint8_t info_hash[20],
+                   const uint8_t peer_id[20]);
+
+/*
+ * peer_send_message
+ * Serialises and sends a message to the peer.
+ * For messages with no payload (choke, unchoke, interested, not_interested)
+ * pass payload=NULL and payload_len=0.
+ */
+int peer_send_message(PeerConnection *conn, uint8_t msg_id,
+                      const uint8_t *payload, uint32_t payload_len);
+
+/*
+ * peer_recv_message
+ * Reads one complete message from the peer.
+ * Returns a heap-allocated PeerMessage on success, NULL on timeout/error.
+ * Caller must free msg->payload and the PeerMessage itself.
+ */
+PeerMessage *peer_recv_message(PeerConnection *conn);
+
+/*
+ * peer_request_block
+ * Sends a REQUEST message for a specific block.
+ *   piece_index : which piece
+ *   offset      : byte offset within that piece (multiple of BLOCK_SIZE)
+ *   length      : number of bytes to request (usually BLOCK_SIZE)
+ */
+int peer_request_block(PeerConnection *conn, uint32_t piece_index,
+                       uint32_t offset, uint32_t length);
+
+/*
+ * peer_download_piece
+ * High-level: requests all blocks of a piece and assembles them into
+ * a caller-supplied buffer. Buffer must be at least piece_length bytes.
+ * Returns 0 on success, -1 on failure.
+ */
+int peer_download_piece(PeerConnection *conn, uint32_t piece_index,
+                        uint32_t piece_length, uint8_t *out_buf);
+
+/*
+ * peer_disconnect
+ * Closes the socket and frees all memory for the connection.
+ */
+void peer_disconnect(PeerConnection *conn);
+
+/*
+ * free_peer_message
+ * Frees a PeerMessage returned by peer_recv_message.
+ */
+void free_peer_message(PeerMessage *msg);
 
 #endif
