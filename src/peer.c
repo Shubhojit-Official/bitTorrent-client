@@ -77,41 +77,70 @@ void bitfield_set_piece(uint8_t *bitfield, size_t piece_index)
 
 PeerConnection *peer_connect(uint32_t ip, uint16_t port)
 {
-  // Host byte order IP to string for getaddrinfo
   struct sockaddr_in addr;
   memset(&addr, 0, sizeof(addr));
   addr.sin_family = AF_INET;
   addr.sin_port = htons(port);
   addr.sin_addr.s_addr = htonl(ip);
 
-  SOCKET sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-  if (sock == INVALID_SOCKET) {
-    fprintf(stderr, "peer: socket() failed: %d\n", WSAGetLastError());
-    return NULL;
-  }
-
-  // Set connect + send/recv timeout
-  DWORD timeout = PEER_TIMEOUT_MS;
-  setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout,
-             sizeof(timeout));
-  setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, (const char *)&timeout,
-             sizeof(timeout));
-
-  // Format IP for logging
-  uint8_t a = (ip >> 24) & 0xFF, b = (ip >> 16) && 0xFF, c = (ip >> 8) & 0xFF,
+  uint8_t a = (ip >> 24) & 0xFF, b = (ip >> 16) & 0xFF, c = (ip >> 8) & 0xFF,
           d = ip & 0xFF;
 
-  if (connect(sock, (struct sockaddr *)&addr, sizeof(addr)) == SOCKET_ERROR) {
-    fprintf(stderr, "peer: connect to %u.%u.%u.%u:%u failed: %d\n", a, b, c, d,
-            port, WSAGetLastError());
+  SOCKET sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+  if (sock == INVALID_SOCKET)
+    return NULL;
+
+  // Set socket to non-blocking mode
+  u_long mode = 1;
+  ioctlsocket(sock, FIONBIO, &mode);
+
+  // connect() returns immediately on non-blocking socket
+  connect(sock, (struct sockaddr *)&addr, sizeof(addr));
+
+  // Use select() to wait up to 1 second for the connection
+  fd_set write_fds;
+  FD_ZERO(&write_fds);
+  FD_SET(sock, &write_fds);
+
+  struct timeval timeout;
+  timeout.tv_sec = 1; // 1 second connect timeout
+  timeout.tv_usec = 0;
+
+  int result = select(0, NULL, &write_fds, NULL, &timeout);
+
+  if (result <= 0) {
+    // 0 = timeout, -1 = error
+    fprintf(stderr, "peer: connect to %u.%u.%u.%u:%u timed out\n", a, b, c, d,
+            port);
     closesocket(sock);
     return NULL;
   }
 
+  // Check if the connection actually succeeded
+  int err = 0;
+  int errlen = sizeof(err);
+  getsockopt(sock, SOL_SOCKET, SO_ERROR, (char *)&err, &errlen);
+  if (err != 0) {
+    fprintf(stderr, "peer: connect to %u.%u.%u.%u:%u failed: %d\n", a, b, c, d,
+            port, err);
+    closesocket(sock);
+    return NULL;
+  }
+
+  // Switch back to blocking mode for normal send/recv
+  mode = 0;
+  ioctlsocket(sock, FIONBIO, &mode);
+
+  // Set send/recv timeout for data transfer
+  DWORD rw_timeout = PEER_TIMEOUT_MS;
+  setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&rw_timeout,
+             sizeof(rw_timeout));
+  setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, (const char *)&rw_timeout,
+             sizeof(rw_timeout));
+
   printf("peer: connected to %u.%u.%u.%u:%u\n", a, b, c, d, port);
 
   PeerConnection *conn = (PeerConnection *)calloc(1, sizeof(PeerConnection));
-
   if (!conn) {
     closesocket(sock);
     return NULL;
@@ -120,8 +149,8 @@ PeerConnection *peer_connect(uint32_t ip, uint16_t port)
   conn->sock = sock;
   conn->ip = ip;
   conn->port = port;
-  conn->peer_choking = 1; // peer starts choking us by default (BEP 3)
-  conn->am_choking = 1;   // we start choking them too
+  conn->peer_choking = 1;
+  conn->am_choking = 1;
   return conn;
 }
 
