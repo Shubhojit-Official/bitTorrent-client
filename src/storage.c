@@ -78,3 +78,19 @@ static int preallocate_file(const char *path, uint64_t size)
   fclose(f);
   return 0;
 }
+
+//  Bitfield helpers (storage's own copy for completed pieces)
+
+static int storage_bitfield_has(const TorrentStorage *s, size_t piece_index)
+{
+  size_t byte = piece_index / 8;
+  int bit = 7 - (int)(piece_index % 8);
+  return (s->bitfield[byte] >> bit) & 1;
+}
+
+static void storage_bitfield_set(TorrentStorage *s, size_t piece_index)
+{
+  size_t byte = piece_index / 8;
+  int bit = 7 - (int)(piece_index % 8);
+  s->bitfield[byte] |= (uint8_t)(1 << bit);
+}
