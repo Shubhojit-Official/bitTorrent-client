@@ -50,3 +50,31 @@ static void build_file_path(const TorrentStorage *storage, size_t file_index,
     snprintf(out + used, out_size - used, "%s", f->path_components[i]);
   }
 }
+
+// Pre-creates a file at its full size so fseek+fwrite works anywhere
+// without gaps. Uses a sparse write — just seeks to the end and writes
+// one zero byte, letting the OS handle the rest.
+static int preallocate_file(const char *path, uint64_t size)
+{
+  FILE *f = fopen(path, "wb");
+  if (!f) {
+    fprintf(stderr, "storage: failed to create file: %s\n", path);
+    return -1;
+  }
+
+  if (size > 0) {
+
+    // Seek to last byte position and write a single zero
+    // This creates a sparse file : the OS doesn't actually
+    // allocate all the disk blocks until data is written there
+    if (_fseeki64(f, (int64_t)(size - 1), SEEK_SET) != 0) {
+      fclose(f);
+      return -1;
+    }
+    uint8_t zero = 0;
+    fwrite(&zero, 1, 1, f);
+  }
+
+  fclose(f);
+  return 0;
+}
