@@ -34,3 +34,19 @@ static void mkdir_recursive(const char *path)
 
   MKDIR(tmp);
 }
+
+// Builds the full path for file i: "output_dir/path_component0/component1/..."
+static void build_file_path(const TorrentStorage *storage, size_t file_index,
+                            char *out, size_t out_size)
+{
+  TorrentFile *f = &storage->meta->files[file_index];
+
+  // Start with output dir
+  snprintf(out, out_size, "%s", storage->output_dir);
+
+  // Append each path component
+  for (size_t i = 0; i < f->path_len; i++) {
+    size_t used = strlen(out);
+    snprintf(out + used, out_size - used, "%s", f->path_components[i]);
+  }
+}
